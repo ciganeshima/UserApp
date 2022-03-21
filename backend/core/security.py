@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 from jose import jwt
+from fastapi import Request
 
 from core.config import settings
 
@@ -15,3 +16,12 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
+
+
+def get_user_from_token(token: Request.cookies) -> Optional[str]:
+    scheme, _, param = token.partition(" ")
+    payload = jwt.decode(param, settings.SECRET_KEY, algorithms=settings.ALGORITHM)
+    user = payload.get("sub")
+    if not user:
+        return None
+    return user

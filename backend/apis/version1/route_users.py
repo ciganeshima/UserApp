@@ -1,4 +1,5 @@
 from typing import List
+from distutils.util import strtobool
 
 import jwt
 from fastapi import APIRouter, Request, responses, Depends, HTTPException, status
@@ -11,6 +12,7 @@ from db.repository.users import retreive_user, list_users_sorted, update_user_by
 from db.models.users import Users
 from core.config import settings
 from core.hashing import Hasher
+from core.security import get_user_from_token
 
 router = APIRouter()
 
@@ -23,41 +25,46 @@ async def create_user(request: Request, db: Session = Depends(get_db)):
     username = form.get("username")
     email = form.get("email")
     password = form.get("password")
+    is_superuser = strtobool(form.get("is_superuser"))
 
     token = request.cookies.get("access_token")
     if not token:
         return templates.TemplateResponse(
-            "general_pages/user_create.html", {"request": request, "msg": "Authorize required"}
+            "general_pages/user_create.html", {"request": request, "msg": "No access token, login first please"}
         )
-    scheme, _, param = token.partition(" ")
-    payload = jwt.decode(param, settings.SECRET_KEY, algorithms=settings.ALGORITHM)
-    user = payload.get("sub")
-    if user is None:
+    user_from_token = get_user_from_token(token)
+    if user_from_token is None:
         return templates.TemplateResponse(
-            "create_item.html", {"request": request, "msg": "Authorize required"}
+            "general_pages/user_create.html",
+            {"request": request, "msg": "No such user from this token, relogin please"}
         )
-    else:
-        user = db.query(Users).filter(Users.username == user).first()
-        if user is None:
-            return templates.TemplateResponse(
-                "create_item.html", {"request": request, "msg": "Authorize required"}
-            )
-        else:
-            add_user = Users(
-                username=username,
-                email=email,
-                hashed_password=Hasher.get_password_hash(password),
-            )
-            db.add(add_user)
-            db.commit()
-            db.refresh(add_user)
-            return responses.RedirectResponse(
-                f"/users/get/{add_user.id}/", status_code=status.HTTP_302_FOUND
-            )
+    user_from_db = db.query(Users).filter(Users.username == user_from_token).first()
+    if user_from_db is None:
+        return templates.TemplateResponse(
+            "general_pages/user_create.html",
+            {"request": request, "msg": "No such user in db with this token, relogin please"}
+        )
+    if not user_from_db.is_superuser:
+        return templates.TemplateResponse(
+            "general_pages/user_create.html",
+            {"request": request, "msg": "You don't have permission to this action"}
+        )
+    add_user = Users(
+        username=username,
+        email=email,
+        hashed_password=Hasher.get_password_hash(password),
+        is_superuser=is_superuser
+    )
+    db.add(add_user)
+    db.commit()
+    db.refresh(add_user)
+    return responses.RedirectResponse(
+        f"/users/get/{add_user.id}/", status_code=status.HTTP_302_FOUND
+    )
 
 
 @router.get("/")
-def create_user(request: Request, db: Session = Depends(get_db)):
+def create_user(request: Request):
     return templates.TemplateResponse("general_pages/user_create.html", {'request': request})
 
 
@@ -78,7 +85,21 @@ def read_users(request: Request, db: Session = Depends(get_db)):
 
 
 @router.put("/update/{id}")
-def update_user(id: int, user: UserUpdate, db: Session = Depends(get_db)):
+def update_user(request: Request, id: int, user: UserUpdate, db: Session = Depends(get_db)):
+    token = request.cookies.get("access_token")
+    if not token:
+        return {"message": "No access token, login first please"}
+    user_from_token = get_user_from_token(token)
+    if user_from_token is None:
+        return {"message": "No such user from this token, relogin please"}
+
+    user_from_db = db.query(Users).filter(Users.username == user_from_token).first()
+    if user_from_db is None:
+        return {"message": "No such user in db with this token, relogin please"}
+
+    if not user_from_db.is_superuser:
+        return {"message": "You don't have permission to this action"}
+    user.is_superuser = strtobool(user.is_superuser)
     message = update_user_by_id(id=id, user=user, db=db)
     if not message:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
@@ -119,7 +140,22 @@ def show_items_to_delete(request: Request, db: Session = Depends(get_db)):
 
 
 @router.delete("/delete/{id}")
-def delete_user(id: int, db: Session = Depends(get_db)):
+def delete_user(request: Request, id: int, db: Session = Depends(get_db)):
+    token = request.cookies.get("access_token")
+    if not token:
+        return templates.TemplateResponse(
+            "general_pages/user_create.html", {"request": request, "msg": "No access token, login first please"}
+        )
+    user_from_token = get_user_from_token(token)
+    if user_from_token is None:
+        return {"message": "No such user from this token, relogin please"}
+    user_from_db = db.query(Users).filter(Users.username == user_from_token).first()
+    if user_from_db is None:
+        return {"message": "No such user in db with this token, relogin please"}
+
+    if not user_from_db.is_superuser:
+        return {"message": "You don't have permission to this action"}
+
     message = delete_user_by_id(id=id, db=db)
     if not message:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,

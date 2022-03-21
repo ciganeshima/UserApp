@@ -10,6 +10,7 @@ class UserCreate(BaseModel):
 class UserUpdate(BaseModel):
     username: str
     email: str
+    is_superuser: str
 
 
 class ShowUser(BaseModel):

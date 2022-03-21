@@ -21,7 +21,12 @@
             <label for="email" class="form-label">Email</label>
             <textarea class="form-control" id="email" required name="email"
                       placeholder="Enter email">{{ user.email }}</textarea>
-            <div class="form-text">Describe all details about items</div>
+            <div class="form-text">Email here</div>
+        </div>
+        <div class="mb-3">
+            <label for="is_superuser" class="form-label">Superuser</label>
+            <input type="text" id="is_superuser" class="form-control" required name="is_superuser" value={{user.is_superuser}}
+                   placeholder="enter if user superuser">
         </div>
     </form>
     <button type="submit" class="btn btn-primary" onclick="update_item({{user.id}})">Update</button>
@@ -34,6 +39,7 @@
         var data = {}
         data["username"] = document.getElementById("username").value
         data["email"] = document.getElementById("email").value
+        data['is_superuser'] = document.getElementById('is_superuser').value
         fetch("/users/update/" + id, {
             method: 'PUT',
             headers: {'Content-Type': 'application/json',},
