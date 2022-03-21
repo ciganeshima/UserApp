@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from schemas.users import ShowUser, UserUpdate
 
 from db.session import get_db
-from db.repository.users import retreive_user, list_users_sorted, update_user_by_id, delete_user_by_id
+from db.repository.users import retrieve_user, retrieve_user_raw, list_users_sorted, update_user_by_id, delete_user_by_id
 from db.models.users import Users
 from core.config import settings
 from core.hashing import Hasher
@@ -64,18 +64,18 @@ async def create_user(request: Request, db: Session = Depends(get_db)):
 
 
 @router.get("/")
-def create_user(request: Request):
+async def create_user(request: Request):
     return templates.TemplateResponse("general_pages/user_create.html", {'request': request})
 
 
 @router.get("/get/{id}", response_model=ShowUser)
-def read_user(request: Request, id: int, db: Session = Depends(get_db)):
-    user = retreive_user(id=id, db=db)
+async def read_user(request: Request, id: int):
+    user = retrieve_user_raw(id=id)
     return templates.TemplateResponse("general_pages/user_detail.html", {'request': request, 'user': user})
 
 
 @router.get("/all", response_model=List[ShowUser])
-def read_users(request: Request, db: Session = Depends(get_db)):
+async def read_users(request: Request, db: Session = Depends(get_db)):
     token = request.cookies.get('access_token')
     if not token:
         return templates.TemplateResponse("general_pages/users.html",
@@ -85,7 +85,7 @@ def read_users(request: Request, db: Session = Depends(get_db)):
 
 
 @router.put("/update/{id}")
-def update_user(request: Request, id: int, user: UserUpdate, db: Session = Depends(get_db)):
+async def update_user(request: Request, id: int, user: UserUpdate, db: Session = Depends(get_db)):
     token = request.cookies.get("access_token")
     if not token:
         return {"message": "No access token, login first please"}
@@ -108,30 +108,37 @@ def update_user(request: Request, id: int, user: UserUpdate, db: Session = Depen
 
 
 @router.get("/update/{id}")
-def update_item(id: int, request: Request, db: Session = Depends(get_db)):
-    user = retreive_user(id=id, db=db)
+async def update_item(id: int, request: Request, db: Session = Depends(get_db)):
+    user = retrieve_user(id=id, db=db)
     return templates.TemplateResponse(
         "general_pages/user_update.html", {"request": request, "user": user}
     )
 
 
-@router.get("/delete/")
-def show_items_to_delete(request: Request, db: Session = Depends(get_db)):
-    errors = []
+@router.get("/update_delete/")
+async def show_items_to_delete(request: Request, db: Session = Depends(get_db)):
     token = request.cookies.get("access_token")
     if token is None:
         return templates.TemplateResponse(
             "general_pages/user_update_delete.html", {"request": request, "msg": "Authorization required"}
         )
-    scheme, _, param = token.partition(" ")
-    payload = jwt.decode(
-        param, settings.SECRET_KEY, algorithms=settings.ALGORITHM
-    )
-    user = payload.get("sub")
-    if user is None:
+    user_from_token = get_user_from_token(token)
+    if user_from_token is None:
         return templates.TemplateResponse(
-            "general_pages/user_update_delete.html", {"request": request, "msg": "Authorize required"}
+            "general_pages/user_update_delete.html", {"request": request, "msg": "No such user from this token, relogin please"}
         )
+
+    user_from_db = db.query(Users).filter(Users.username == user_from_token).first()
+    if user_from_db is None:
+        return templates.TemplateResponse(
+            "general_pages/user_update_delete.html", {"request": request, "msg": "No such user in db with this token, relogin please"}
+        )
+
+    if not user_from_db.is_superuser:
+        return templates.TemplateResponse(
+            "general_pages/user_update_delete.html", {"request": request, "msg": "You don't have permission to this action"}
+        )
+
     users = list_users_sorted(db=db)
     print(users)
     return templates.TemplateResponse(
@@ -140,7 +147,7 @@ def show_items_to_delete(request: Request, db: Session = Depends(get_db)):
 
 
 @router.delete("/delete/{id}")
-def delete_user(request: Request, id: int, db: Session = Depends(get_db)):
+async def delete_user(request: Request, id: int, db: Session = Depends(get_db)):
     token = request.cookies.get("access_token")
     if not token:
         return templates.TemplateResponse(

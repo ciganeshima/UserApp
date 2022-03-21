@@ -1,8 +1,11 @@
 from sqlalchemy.orm import Session
-
+from sqlalchemy import sql
 from schemas.users import UserCreate, UserUpdate
 from db.models.users import Users
+from db.session import engine
 from core.hashing import Hasher
+
+USERS_TABLE = 'USERS'
 
 
 def create_new_user(user: UserCreate, db: Session):
@@ -18,17 +21,28 @@ def create_new_user(user: UserCreate, db: Session):
     return user
 
 
-def retreive_user(id: int, db: Session):
-    item = db.query(Users).filter(Users.id == id).first()
-    return item
+def retrieve_user_raw(id: int): # raw sql
+    with engine.connect() as connection:
+        query = sql.text(f'SELECT * FROM {USERS_TABLE} WHERE ID={id} FETCH FIRST ROW ONLY')
+
+        execute_query = connection.execute(query)
+        for field in execute_query:
+            user = Users(username=field[1], email=field[2], is_active=field[4], is_superuser=field[5])
+        return user
 
 
-def list_users(db: Session):  # new
+def retrieve_user(id: int, db: Session):
+    user = db.query(Users).filter(Users.id == id).first()
+    print(user)
+    return user
+
+
+def list_users(db: Session):
     users = db.query(Users).all()
     return users
 
 
-def list_users_sorted(db: Session):  # new
+def list_users_sorted(db: Session):
     users = db.query(Users).order_by(Users.id)
     return users
 
