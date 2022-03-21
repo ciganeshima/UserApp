@@ -14,6 +14,8 @@ use
 
 'uvicorn main:app --reload'
 
+in folder UserApp/backend
+
 to start this app on http://127.0.0.1:8000
 
 # Data Base seed
