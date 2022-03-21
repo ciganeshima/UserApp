@@ -34,7 +34,6 @@ def retrieve_user_raw(id: int): # raw sql
 
 def retrieve_user(id: int, db: Session):
     user = db.query(Users).filter(Users.id == id).first()
-    print(user)
     return user
 
 

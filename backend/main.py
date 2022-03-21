@@ -1,3 +1,4 @@
+import uvicorn
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
@@ -29,14 +30,17 @@ def initialize_table(target, connection, **kw):
         connection.execute(target.insert(), settings.INITIAL_DATA[table_name])
 
 
-def start_application():
-    app = FastAPI(title=settings.PROJECT_NAME, version=settings.PROJECT_VERSION)
-    include_router(app)
-    configure_static(app)
+app = FastAPI(title=settings.PROJECT_NAME, version=settings.PROJECT_VERSION)
+include_router(app)
+configure_static(app)
+
+
+@app.on_event("startup")
+def configure():
     # set up this event before table creation
     event.listen(Users.__table__, 'after_create', initialize_table)
     create_tables()
-    return app
 
 
-app = start_application()
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)
