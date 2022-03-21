@@ -1,18 +1,16 @@
 from typing import List
 from distutils.util import strtobool
 
-import jwt
 from fastapi import APIRouter, Request, responses, Depends, HTTPException, status
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
-from schemas.users import ShowUser, UserUpdate
 
 from db.session import get_db
 from db.repository.users import retrieve_user, retrieve_user_raw, list_users_sorted, update_user_by_id, delete_user_by_id
 from db.models.users import Users
-from core.config import settings
 from core.hashing import Hasher
 from core.security import get_user_from_token
+from schemas.users import ShowUser, UserUpdate
 
 router = APIRouter()
 

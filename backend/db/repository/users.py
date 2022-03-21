@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import sql
+
 from schemas.users import UserCreate, UserUpdate
 from db.models.users import Users
 from db.session import engine
